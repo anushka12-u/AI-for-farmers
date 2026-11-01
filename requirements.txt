@@ -1,0 +1,14 @@
+fastapi
+pandas
+numpy
+uvicorn
+google-genai
+python-dotenv
+faster-whisper==1.2.1
+python-multipart
+gTTS
+av==16.0.1
+streamlit
+requests
+gnani-vachana
+transformers
