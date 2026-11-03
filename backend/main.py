@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 
@@ -48,10 +49,10 @@ def health():
 @app.post("/api/v1/chat/voice")
 async def ask_question_with_audio_and_tts(
     file: UploadFile = File(...),
-    language: str = Form("hi")
+    language: str = Form("auto")
 ):
 
-    if language not in {"hi", "en"}:
+    if language not in {"hi", "en", "auto"}:
         raise HTTPException(
             status_code=400,
             detail="Unsupported language"
@@ -69,15 +70,15 @@ async def ask_question_with_audio_and_tts(
     filepath = UPLOAD_DIR / filename
 
     try:
-        # Step 1: Save uploaded audio
+        # STEP 1: Save uploaded audio
         with open(filepath, "wb") as f:
             while chunk := await file.read(1024 * 1024):
                 f.write(chunk)
 
-        # Step 2: Convert audio to text
+        # STEP 2: Speech to text
         transcription_result = speech_to_text(str(filepath))
 
-        question = transcription_result.get("text", "")
+        question = transcription_result.get("text", "").strip()
 
         if not question:
             raise HTTPException(
@@ -85,26 +86,55 @@ async def ask_question_with_audio_and_tts(
                 detail="Could not transcribe audio"
             )
 
-        # Step 3: Generate AI answer
-        answer = ask_farmer_ai(question)
+        # STEP 3: Determine language
+        detected_language = transcription_result.get("language", "unknown")
 
-        # Step 4: Generate speech
-        detected_language = transcription_result.get(
-            "language", language
+        if language == "hi":
+            detected_language = "hi-IN"
+        elif language == "en":
+            detected_language = "en-IN"
+
+        if detected_language == "unknown":
+            raise HTTPException(
+                status_code=400,
+                detail="Could not detect spoken language"
+            )
+
+        print("QUESTION:", question)
+        print("DETECTED LANGUAGE:", detected_language)
+
+        # STEP 4: Generate Gemini response
+        answer = ask_farmer_ai(
+            question,
+            detected_language
         )
 
+        print("AI ANSWER:", answer)
+
+        # STEP 5: Generate speech
         tts_file_path = text_to_speech(
             answer,
             detected_language
         )
 
-        # Step 5: Return response
+        # STEP 6: Return response
         return {
             "question": question,
             "language": detected_language,
             "answer": answer,
             "audio_url": f"/audio/{Path(tts_file_path).name}"
         }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print("ERROR:", str(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
     finally:
         filepath.unlink(missing_ok=True)

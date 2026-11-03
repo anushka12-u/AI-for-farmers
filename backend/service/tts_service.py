@@ -1,35 +1,43 @@
+
 import os
 import uuid
+from pathlib import Path
 from dotenv import load_dotenv
 from gnani.tts import GnaniTTSClient, AudioConfig
+from service.language_service import ENGLISH, HINDI, normalize_language
 
 load_dotenv()
 
-# Initialize Gnani TTS client
 client = GnaniTTSClient(
     api_key=os.getenv("GNANI_API_KEY")
 )
 
-def text_to_speech(answer, language):
 
-    os.makedirs("audio_outputs", exist_ok=True)
+def text_to_speech(answer, language):
+    output_dir = Path(__file__).resolve().parent.parent / "audio_outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"{uuid.uuid4()}.mp3"
-    filepath = os.path.join("audio_outputs", filename)
+    filepath = output_dir / filename
+    language = normalize_language(language)
 
-    language_map = {
-        "Hindi": "hi-IN",
-        "hi": "hi-IN",
-        "English": "en-IN",
-        "en": "en-IN"
-    }
+    if language == HINDI:
+        language_code = HINDI
+        voice = "Nalini"
+    elif language == ENGLISH:
+        language_code = ENGLISH
+        # Pranav is a conversational English voice in timbre-v2.5.
+        voice = os.getenv("GNANI_ENGLISH_VOICE", "Pranav")
 
-    language_code = language_map.get(language, language)
+    else:
+        raise ValueError(
+            f"Unsupported TTS language: {language}"
+        )
 
     try:
         audio = client.synthesize(
             answer,
-            voice="Nalini",
+            voice=voice,
             model="timbre-v2.5",
             language=language_code,
             speed=1.0,
@@ -40,10 +48,10 @@ def text_to_speech(answer, language):
             )
         )
 
-        with open(filepath, "wb") as f:
+        with filepath.open("wb") as f:
             f.write(audio)
 
-        return filepath
+        return str(filepath)
 
     except Exception as e:
         raise RuntimeError(f"Gnani TTS Error: {str(e)}")
